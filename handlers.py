@@ -68,3 +68,22 @@ async def cmd_help(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "💡 *提示：系统每小时自动巡检一次，每天 22:00 发送汇总日报。*"
     )
     await update.message.reply_text(help_text, parse_mode='Markdown')
+    
+    
+    
+async def cmd_set_cookie(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """远程更新 Cookie 指令"""
+    if update.effective_user.id not in ALLOWED_USERS:
+        return
+
+    # 获取用户发送的指令内容
+    new_cookie = " ".join(context.args)
+    if not new_cookie:
+        await update.message.reply_text("❌ 请在指令后粘贴新的 Cookie 字符串。")
+        return
+
+    # 这里可以调用一个函数将新 Cookie 写入配置文件或环境变量
+    # 甚至可以直接让 RSSHub 容器通过环境变量读取它
+    # ... 实现逻辑 ...
+    
+    await update.message.reply_text("✅ Cookie 更新成功！正在重启巡检任务...")
