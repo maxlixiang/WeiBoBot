@@ -26,7 +26,7 @@ async def check_weibo(context):
     
     # 获取任意一个博主 UID 用作“哨兵测试”
     first_uid = next(iter(targets))
-    target_url = "http://131.143.214.250:1200/weibo/user/wrong_id"
+    target_url = f"{RSSHUB_BASE}{first_uid}"
 
     try:
         async with httpx.AsyncClient(timeout=20) as client:
