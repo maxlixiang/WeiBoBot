@@ -8,5 +8,6 @@ services:
     volumes:
       - ./history.json:/app/history.json
       - ./stats.json:/app/stats.json
+      - ./targets.json:/app/targets.json  # <--- 加这行
     env_file:
       - .env
