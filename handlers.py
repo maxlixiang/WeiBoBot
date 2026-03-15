@@ -38,3 +38,33 @@ async def cmd_list(update: Update, context: ContextTypes.DEFAULT_TYPE):
     msg += f"\n💡 共计 {len(targets)} 个目标。"
     
     await update.message.reply_text(msg, parse_mode='Markdown')
+    
+async def cmd_report(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """响应 /report 指令，手动查看当前巡检统计"""
+    if update.effective_user.id not in ALLOWED_USERS:
+        return
+
+    stats = load_json(STATS_FILE, {"checks": 0, "new_posts": 0})
+    
+    msg = (
+        "📊 **实时巡检状态报告**\n\n"
+        f"⏳ 自上次日报以来：\n"
+        f"🔄 累计巡检次数：`{stats['checks']}` 次\n"
+        f"✨ 捕获新微博数：`{stats['new_posts']}` 条\n\n"
+        "👌 机器人运行正常，正在持续监控中。"
+    )
+    await update.message.reply_text(msg, parse_mode='Markdown')
+
+async def cmd_help(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """响应 /help 指令，列出所有可用命令"""
+    if update.effective_user.id not in ALLOWED_USERS:
+        return
+
+    help_text = (
+        "🤖 **WeiboBot 指令指南**\n\n"
+        "🔹 /list - 查看当前监控的博主名单\n"
+        "🔹 /report - 立即查看当前的巡检统计数据\n"
+        "🔹 /help - 显示此帮助信息\n\n"
+        "💡 *提示：系统每小时自动巡检一次，每天 22:00 发送汇总日报。*"
+    )
+    await update.message.reply_text(help_text, parse_mode='Markdown')
