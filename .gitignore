@@ -1,0 +1,7 @@
+# 忽略环境变量文件（最重要！）
+.env
+
+# 忽略本地运行产生的缓存和数据文件
+__pycache__/
+history.json
+stats.json

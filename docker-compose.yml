@@ -1,0 +1,12 @@
+version: '3.8'
+
+services:
+  weibobot:
+    build: .
+    container_name: weibobot
+    restart: always
+    volumes:
+      - ./history.json:/app/history.json
+      - ./stats.json:/app/stats.json
+    env_file:
+      - .env

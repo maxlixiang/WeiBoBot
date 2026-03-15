@@ -1,0 +1,5 @@
+python-telegram-bot
+httpx
+feedparser
+beautifulsoup4
+python-dotenv
