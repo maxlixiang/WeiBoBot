@@ -1,0 +1,23 @@
+name: Deploy to VPS
+
+# 触发条件：只要代码 push 到 main 分支，就启动部署
+on:
+  push:
+    branches: [ main ]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Executing remote ssh commands using ssh key
+      uses: appleboy/ssh-action@master
+      with:
+        host: ${{ secrets.VPS_HOST }}
+        username: ${{ secrets.VPS_USERNAME }}
+        key: ${{ secrets.VPS_SSH_KEY }}
+        script: |
+          cd /root/WeiboBot
+          # 拉取最新的代码
+          git pull origin main
+          # 重新构建并重启 Docker 容器
+          docker-compose up -d --build
