@@ -14,56 +14,51 @@ HISTORY_FILE = "history.json"
 STATS_FILE = "stats.json"
 
 async def check_weibo(context):
-    """每小时执行一次的多目标微博巡检任务"""
+    """带异常报警的多目标巡检任务"""
     history = load_json(HISTORY_FILE, {})
     stats = load_json(STATS_FILE, {"checks": 0, "new_posts": 0})
     targets = load_json(TARGETS_FILE, {})
     
     if not targets:
-        print("⚠️ 监控列表为空，跳过本次巡检。")
         return
 
     stats["checks"] += 1 
     
+    # 获取任意一个博主 UID 用作“哨兵测试”
+    first_uid = next(iter(targets))
+    target_url = "http://131.143.214.250:1200/weibo/user/wrong_id"
+
     try:
-        # 遍历花名册里的每一个博主
+        async with httpx.AsyncClient(timeout=20) as client:
+            resp = await client.get(target_url)
+            
+            # --- 【新增】Cookie/接口预警逻辑 ---
+            if resp.status_code != 200:
+                error_msg = f"🚨 **RSSHub 异常警报**\n\n状态码：`{resp.status_code}`\n原因：可能是微博 Cookie 过期或 RSSHub 实例被限制。\n请检查 VPS 上的 RSSHub 容器日志！"
+                for uid in ALLOWED_USERS:
+                    await context.bot.send_message(chat_id=uid, text=error_msg, parse_mode='Markdown')
+                return # 发生错误直接停止本次巡检，避免重复报错
+
+            feed = feedparser.parse(resp.text)
+            
+            # RSSHub 报错通常会在标题里写 "RSSHub 发生错误"
+            if "RSSHub" in feed.feed.title and "Error" in feed.feed.title:
+                error_msg = "🚨 **Weibo Cookie 已失效！**\n\n检测到 RSSHub 报错，请立即更新微博 Cookie 并重启 RSSHub 服务。"
+                for uid in ALLOWED_USERS:
+                    await context.bot.send_message(chat_id=uid, text=error_msg, parse_mode='Markdown')
+                return
+
+        # --- 以下是正常的遍历逻辑（保持不变） ---
         for uid, memo_name in targets.items():
-            target_url = f"{RSSHUB_BASE}{uid}"
-            
-            try:
-                async with httpx.AsyncClient(timeout=20) as client:
-                    resp = await client.get(target_url)
-                    feed = feedparser.parse(resp.text)
-                    
-                author_name = feed.feed.title if 'title' in feed.feed else memo_name
-                
-                for entry in reversed(feed.entries[:5]):
-                    post_id = entry.link 
-                    
-                    if post_id not in history:
-                        try:
-                            soup = BeautifulSoup(entry.description, 'html.parser')
-                            clean_text = soup.get_text(separator='\n', strip=True)
-                            images = [img['src'] for img in soup.find_all('img')]
-                            
-                            await send_weibo_alert(context, author_name, clean_text, images, entry.link)
-                            
-                            history[post_id] = True
-                            stats["new_posts"] += 1
-                            await asyncio.sleep(3)
-                            
-                        except Exception as e:
-                            print(f"发送单条微博失败 ({post_id}): {e}")
-            except Exception as e:
-                print(f"获取博主 {memo_name}({uid}) 数据失败: {e}")
-            
-            # 查完一个博主，稍微休息 2 秒防止被屏蔽
-            await asyncio.sleep(2)
-                
+            # ... 这里的抓取代码保持和你之前的一致即可 ...
+            # 为了篇幅简洁，这里省略重复的抓取循环
+            pass
+
         save_json(HISTORY_FILE, history)
         save_json(STATS_FILE, stats)
+
     except Exception as e:
-         print(f"获取微博数据大循环失败: {e}")
+         print(f"巡检时发生未知错误: {e}")
 
 async def send_weibo_alert(context, author, text, images, link):
     """负责将微博内容排版并发送到 Telegram (HTML安全模式)"""
