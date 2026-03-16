@@ -4,11 +4,10 @@ import asyncio
 from bs4 import BeautifulSoup
 from telegram import InputMediaPhoto
 from utils import load_json, save_json
-from config import ALLOWED_USERS, TARGETS_FILE
+from config import ALLOWED_USERS, TARGETS_FILE,RSSHUB_BASE
 import html
 
-# 替换成你的 RSSHub 基础链接
-RSSHUB_BASE = "http://131.143.214.250:1200/weibo/user/"
+
 
 HISTORY_FILE = "history.json"
 STATS_FILE = "stats.json"

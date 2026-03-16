@@ -12,3 +12,5 @@ ALLOWED_USERS = [int(x) for x in os.getenv("ALLOWED_USERS", "").split(",") if x]
 HISTORY_FILE = "history.json"
 STATS_FILE = "stats.json"
 TARGETS_FILE = "targets.json"
+
+RSSHUB_BASE = "http://131.143.214.250:1200/weibo/user/"

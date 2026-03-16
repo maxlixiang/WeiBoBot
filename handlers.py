@@ -1,3 +1,8 @@
+import httpx
+import feedparser
+import asyncio
+from bs4 import BeautifulSoup
+from config import RSSHUB_BASE
 from telegram import Update
 from telegram.ext import ContextTypes
 from utils import load_json, save_json
@@ -87,3 +92,61 @@ async def cmd_set_cookie(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # ... 实现逻辑 ...
     
     await update.message.reply_text("✅ Cookie 更新成功！正在重启巡检任务...")
+    
+async def cmd_latest(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """响应 /latest 指令，主动拉取博主的最新 3 条动态"""
+    if update.effective_user.id not in ALLOWED_USERS:
+        return
+
+    targets = load_json(TARGETS_FILE, {})
+    if not targets:
+        await update.message.reply_text("📭 当前监控列表为空，无法抓取。")
+        return
+
+    # 获取目标 UID，支持带参数抓取特定博主 (例: /latest 7888222767)，默认取列表第一个
+    uid_to_check = context.args[0] if context.args else next(iter(targets))
+    
+    if uid_to_check not in targets:
+        await update.message.reply_text(f"❌ UID `{uid_to_check}` 不在您的监控列表中！", parse_mode='Markdown')
+        return
+
+    memo_name = targets[uid_to_check]
+    status_msg = await update.message.reply_text(f"🔍 正在为您拉取 **{memo_name}** 的最新动态...", parse_mode='Markdown')
+    
+    target_url = f"{RSSHUB_BASE}{uid_to_check}"
+    
+    try:
+        async with httpx.AsyncClient(timeout=15) as client:
+            resp = await client.get(target_url)
+            if resp.status_code != 200:
+                await status_msg.edit_text(f"❌ 请求 RSSHub 失败，状态码：`{resp.status_code}`", parse_mode='Markdown')
+                return
+                
+            feed = feedparser.parse(resp.text)
+            entries = feed.entries[:3] # 切片，仅提取前 3 条
+            
+            if not entries:
+                await status_msg.edit_text(f"📭 **{memo_name}** 最近没有发布任何内容。", parse_mode='Markdown')
+                return
+                
+            await status_msg.edit_text(f"✅ 成功拉取 **{memo_name}** 的最新 {len(entries)} 条动态：", parse_mode='Markdown')
+            
+            for entry in entries:
+                # 简单清洗 HTML 标签，保留纯文本用于快捷预览
+                soup = BeautifulSoup(entry.description, "html.parser")
+                clean_text = soup.get_text(separator='\n').strip()
+                # 若文本过长则截断，保持排版美观
+                display_text = clean_text[:200] + "..." if len(clean_text) > 200 else clean_text
+                
+                msg = (
+                    f"🕒 {entry.published}\n\n"
+                    f"📝 {display_text}\n\n"
+                    f"🔗 [点击查看原微博]({entry.link})"
+                )
+                await update.message.reply_text(msg, parse_mode='Markdown', disable_web_page_preview=True)
+                
+                # ⚠️ 必须保留此休眠：连续发送 3 条消息，防止被 Telegram 官方风控
+                await asyncio.sleep(1.5) 
+                
+    except Exception as e:
+        await status_msg.edit_text(f"❌ 抓取时发生意外错误：`{str(e)}`", parse_mode='Markdown')
