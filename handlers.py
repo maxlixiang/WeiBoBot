@@ -3,7 +3,7 @@ import feedparser
 import asyncio
 from bs4 import BeautifulSoup
 from config import RSSHUB_BASE
-from telegram import Update
+from telegram import Update, InputMediaPhoto
 from telegram.ext import ContextTypes
 from utils import load_json, save_json
 from config import STATS_FILE, ALLOWED_USERS, TARGETS_FILE
@@ -94,7 +94,7 @@ async def cmd_set_cookie(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("✅ Cookie 更新成功！正在重启巡检任务...")
     
 async def cmd_latest(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """响应 /latest 指令，主动拉取博主的最新 3 条动态"""
+    """响应 /latest 指令，主动拉取博主的最新 3 条动态（支持多图）"""
     if update.effective_user.id not in ALLOWED_USERS:
         return
 
@@ -103,7 +103,6 @@ async def cmd_latest(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("📭 当前监控列表为空，无法抓取。")
         return
 
-    # 获取目标 UID，支持带参数抓取特定博主 (例: /latest 7888222767)，默认取列表第一个
     uid_to_check = context.args[0] if context.args else next(iter(targets))
     
     if uid_to_check not in targets:
@@ -123,7 +122,7 @@ async def cmd_latest(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 return
                 
             feed = feedparser.parse(resp.text)
-            entries = feed.entries[:3] # 切片，仅提取前 3 条
+            entries = feed.entries[:3]
             
             if not entries:
                 await status_msg.edit_text(f"📭 **{memo_name}** 最近没有发布任何内容。", parse_mode='Markdown')
@@ -132,21 +131,42 @@ async def cmd_latest(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await status_msg.edit_text(f"✅ 成功拉取 **{memo_name}** 的最新 {len(entries)} 条动态：", parse_mode='Markdown')
             
             for entry in entries:
-                # 简单清洗 HTML 标签，保留纯文本用于快捷预览
                 soup = BeautifulSoup(entry.description, "html.parser")
                 clean_text = soup.get_text(separator='\n').strip()
-                # 若文本过长则截断，保持排版美观
                 display_text = clean_text[:200] + "..." if len(clean_text) > 200 else clean_text
+                
+                # 【新增】：提取所有图片链接
+                img_tags = soup.find_all('img')
+                images = [img.get('src') for img in img_tags if img.get('src')]
                 
                 msg = (
                     f"🕒 {entry.published}\n\n"
                     f"📝 {display_text}\n\n"
                     f"🔗 [点击查看原微博]({entry.link})"
                 )
-                await update.message.reply_text(msg, parse_mode='Markdown', disable_web_page_preview=True)
                 
-                # ⚠️ 必须保留此休眠：连续发送 3 条消息，防止被 Telegram 官方风控
-                await asyncio.sleep(1.5) 
+                chat_id = update.effective_chat.id
+                
+                # 【新增】：根据图片数量决定发送模式
+                if not images:
+                    # 没图片，发纯文本
+                    await context.bot.send_message(chat_id=chat_id, text=msg, parse_mode='Markdown', disable_web_page_preview=True)
+                elif len(images) == 1:
+                    # 单张图片
+                    await context.bot.send_photo(chat_id=chat_id, photo=images[0], caption=msg, parse_mode='Markdown')
+                else:
+                    # 多张图片 (Telegram 限制一个 MediaGroup 最多 10 张)
+                    media_group = []
+                    for i, img_url in enumerate(images[:10]): 
+                        if i == 0:
+                            # 第一张图带上文字说明
+                            media_group.append(InputMediaPhoto(img_url, caption=msg, parse_mode='Markdown'))
+                        else:
+                            media_group.append(InputMediaPhoto(img_url))
+                    await context.bot.send_media_group(chat_id=chat_id, media=media_group)
+                
+                # ⚠️ 连续发送多条带图消息，安全休眠时间稍微拉长一点
+                await asyncio.sleep(2) 
                 
     except Exception as e:
         await status_msg.edit_text(f"❌ 抓取时发生意外错误：`{str(e)}`", parse_mode='Markdown')
