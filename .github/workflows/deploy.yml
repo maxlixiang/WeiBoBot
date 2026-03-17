@@ -15,7 +15,6 @@ jobs:
         host: ${{ secrets.VPS_HOST }}
         username: ${{ secrets.VPS_USERNAME }}
         port: 3858
-        known_hosts: ${{ secrets.SSH_KNOWN_HOSTS }}  # <--- 新增这一行
         script: |
           cd /root/WeiBoBot
           git pull origin main
