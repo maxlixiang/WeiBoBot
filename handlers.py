@@ -84,6 +84,7 @@ async def cmd_help(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "🔹 /report - 立即查看当前的巡检统计数据\n"
         "🔹 /latest - 获取指定博主（或默认首位）的最新 3 条动态\n"
         "🔹 /help - 显示此帮助信息\n\n"
+        "🔹 /setcookie - 设置新的cookie信息\n"
         "💡 **使用小窍门：**\n"
         "发送 `/latest [UID]` 可精准查询。例如：`/latest 7888222767` \n\n"
         "💡 *提示：系统每小时自动巡检一次，每天 22:00 发送汇总日报。*"
