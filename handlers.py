@@ -1,5 +1,6 @@
 import httpx
 import feedparser
+import subprocess
 import asyncio
 from bs4 import BeautifulSoup
 from config import RSSHUB_BASE
@@ -7,6 +8,13 @@ from telegram import Update, InputMediaPhoto
 from telegram.ext import ContextTypes
 from utils import load_json, save_json
 from config import STATS_FILE, ALLOWED_USERS, TARGETS_FILE
+
+
+# ⚠️ 请确保这里的容器名与您部署 RSSHub 时填写的 container_name 一致
+RSSHUB_CONTAINER_NAME = "rsshub" 
+# 对应的环境配置文件路径
+RSSHUB_ENV_PATH = "/app/rsshub.env"
+
 
 async def daily_report(context):
     """每天固定时间发送的统计日报"""
@@ -85,21 +93,40 @@ async def cmd_help(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     
 async def cmd_set_cookie(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """远程更新 Cookie 指令"""
+    """远程更新 Cookie 并重启 RSSHub 容器"""
     if update.effective_user.id not in ALLOWED_USERS:
         return
 
-    # 获取用户发送的指令内容
-    new_cookie = " ".join(context.args)
+    new_cookie = " ".join(context.args).strip()
     if not new_cookie:
-        await update.message.reply_text("❌ 请在指令后粘贴新的 Cookie 字符串。")
+        await update.message.reply_text("❌ 格式错误！请使用：`/set_cookie 你的Cookie字符串`")
         return
 
-    # 这里可以调用一个函数将新 Cookie 写入配置文件或环境变量
-    # 甚至可以直接让 RSSHub 容器通过环境变量读取它
-    # ... 实现逻辑 ...
-    
-    await update.message.reply_text("✅ Cookie 更新成功！正在重启巡检任务...")
+    status_msg = await update.message.reply_text("⏳ 正在更新 Cookie 并准备重启 RSSHub...")
+
+    try:
+        # 1. 将新 Cookie 写入挂载的 env 文件
+        # 注意：这里假设 RSSHub 读取的是 WEIBO_COOKIES 变量
+        with open(RSSHUB_ENV_PATH, "w") as f:
+            f.write(f"WEIBO_COOKIES='{new_cookie}'\n")
+        
+        # 2. 调用系统命令重启 RSSHub 容器
+        # 使用 asyncio.create_subprocess_shell 保证不阻塞机器人主进程
+        process = await asyncio.create_subprocess_shell(
+            f"docker restart {RSSHUB_CONTAINER_NAME}",
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE
+        )
+        stdout, stderr = await process.communicate()
+
+        if process.returncode == 0:
+            await status_msg.edit_text("✅ **更新成功！**\n\nRSSHub 已带着新 Cookie 重启完成。")
+        else:
+            error_log = stderr.decode().strip()
+            await status_msg.edit_text(f"⚠️ 容器重启失败！\n错误信息：`{error_log}`")
+
+    except Exception as e:
+        await status_msg.edit_text(f"❌ 发生意外错误：`{str(e)}`")
     
 async def cmd_latest(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """响应 /latest 指令，主动拉取博主的最新 3 条动态（支持多图）"""
