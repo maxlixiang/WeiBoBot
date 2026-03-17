@@ -21,7 +21,7 @@ async def check_weibo(context):
     if not targets:
         return
 
-    stats["checks"] += 1 
+    stats["checks"] = stats.get("checks", 0) + 1 
     
     # 获取任意一个博主 UID 用作“哨兵测试”
     first_uid = next(iter(targets))
