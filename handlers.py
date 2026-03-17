@@ -49,13 +49,18 @@ async def cmd_report(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_user.id not in ALLOWED_USERS:
         return
 
+    # 这里虽然有默认值，但如果文件存在且内容为 {}，load_json 依然会返回 {}
     stats = load_json(STATS_FILE, {"checks": 0, "new_posts": 0})
+    
+    # 【关键修改】：使用 .get(key, default) 替代直接索引
+    checks_count = stats.get('checks', 0)
+    posts_count = stats.get('new_posts', 0)
     
     msg = (
         "📊 **实时巡检状态报告**\n\n"
         f"⏳ 自上次日报以来：\n"
-        f"🔄 累计巡检次数：`{stats['checks']}` 次\n"
-        f"✨ 捕获新微博数：`{stats['new_posts']}` 条\n\n"
+        f"🔄 累计巡检次数：`{checks_count}` 次\n"
+        f"✨ 捕获新微博数：`{posts_count}` 条\n\n"
         "👌 机器人运行正常，正在持续监控中。"
     )
     await update.message.reply_text(msg, parse_mode='Markdown')
