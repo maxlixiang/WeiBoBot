@@ -109,7 +109,7 @@ async def cmd_set_cookie(update: Update, context: ContextTypes.DEFAULT_TYPE):
         # 1. 将新 Cookie 写入挂载的 env 文件
         # 注意：这里假设 RSSHub 读取的是 WEIBO_COOKIES 变量
         with open(RSSHUB_ENV_PATH, "w") as f:
-            f.write(f"WEIBO_COOKIES={new_cookie}\n")
+            f.write(f"WEIBO_COOKIES='{new_cookie}'\n")
         
         # 2. 调用系统命令重启 RSSHub 容器
         # 使用 asyncio.create_subprocess_shell 保证不阻塞机器人主进程
