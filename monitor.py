@@ -22,37 +22,55 @@ async def check_weibo(context):
         return
 
     stats["checks"] = stats.get("checks", 0) + 1 
-    
-    # 获取任意一个博主 UID 用作“哨兵测试”
-    first_uid = next(iter(targets))
-    target_url = f"{RSSHUB_BASE}{first_uid}"
 
     try:
         async with httpx.AsyncClient(timeout=20) as client:
-            resp = await client.get(target_url)
-            
-            # --- 【新增】Cookie/接口预警逻辑 ---
-            if resp.status_code != 200:
-                error_msg = f"🚨 **RSSHub 异常警报**\n\n状态码：`{resp.status_code}`\n原因：可能是微博 Cookie 过期或 RSSHub 实例被限制。\n请检查 VPS 上的 RSSHub 容器日志！"
-                for uid in ALLOWED_USERS:
-                    await context.bot.send_message(chat_id=uid, text=error_msg, parse_mode='Markdown')
-                return # 发生错误直接停止本次巡检，避免重复报错
+            # 真正开始遍历每个监控目标
+            for uid, memo_name in targets.items():
+                target_url = f"{RSSHUB_BASE}{uid}"
+                resp = await client.get(target_url)
+                
+                # --- Cookie/接口预警逻辑 ---
+                if resp.status_code != 200:
+                    error_msg = f"🚨 **RSSHub 异常警报**\n\n状态码：`{resp.status_code}`\n原因：可能是微博 Cookie 过期或 RSSHub 实例被限制。\n请检查 VPS 上的 RSSHub 容器日志！"
+                    for user_id in ALLOWED_USERS:
+                        await context.bot.send_message(chat_id=user_id, text=error_msg, parse_mode='Markdown')
+                    return # 发生错误直接停止本次巡检
 
-            feed = feedparser.parse(resp.text)
-            
-            # RSSHub 报错通常会在标题里写 "RSSHub 发生错误"
-            if "RSSHub" in feed.feed.title and "Error" in feed.feed.title:
-                error_msg = "🚨 **Weibo Cookie 已失效！**\n\n检测到 RSSHub 报错，请立即更新微博 Cookie 并重启 RSSHub 服务。"
-                for uid in ALLOWED_USERS:
-                    await context.bot.send_message(chat_id=uid, text=error_msg, parse_mode='Markdown')
-                return
+                feed = feedparser.parse(resp.text)
+                
+                if "RSSHub" in feed.feed.title and "Error" in feed.feed.title:
+                    error_msg = "🚨 **Weibo Cookie 已失效！**\n\n检测到 RSSHub 报错，请立即更新微博 Cookie 并重启 RSSHub 服务。"
+                    for user_id in ALLOWED_USERS:
+                        await context.bot.send_message(chat_id=user_id, text=error_msg, parse_mode='Markdown')
+                    return
 
-        # --- 以下是正常的遍历逻辑（保持不变） ---
-        for uid, memo_name in targets.items():
-            # ... 这里的抓取代码保持和你之前的一致即可 ...
-            # 为了篇幅简洁，这里省略重复的抓取循环
-            pass
+                # --- 核心抓取与比对逻辑 ---
+                # 检查最新的 5 条动态
+                for entry in feed.entries[:5]:
+                    post_id = entry.link # 使用链接作为唯一标识符
+                    
+                    # 如果这条微博不在历史记录中，说明是新的！
+                    if post_id not in history:
+                        # 1. 标记为已处理
+                        history[post_id] = True
+                        stats["new_posts"] = stats.get("new_posts", 0) + 1
+                        
+                        # 2. 解析正文和图片
+                        soup = BeautifulSoup(entry.description, "html.parser")
+                        clean_text = soup.get_text(separator='\n').strip()
+                        display_text = clean_text[:200] + "..." if len(clean_text) > 200 else clean_text
+                        
+                        img_tags = soup.find_all('img')
+                        images = [img.get('src') for img in img_tags if img.get('src')]
+                        
+                        # 3. 发送提醒
+                        await send_weibo_alert(context, memo_name, display_text, images, entry.link)
+                        
+                        # 4. 休息两秒，防止触发 Telegram 频繁发送限制
+                        await asyncio.sleep(2)
 
+        # 巡检完所有目标后，保存记录
         save_json(HISTORY_FILE, history)
         save_json(STATS_FILE, stats)
 
