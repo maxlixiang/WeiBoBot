@@ -2,6 +2,7 @@ import httpx
 import feedparser
 import subprocess
 import asyncio
+import html
 from bs4 import BeautifulSoup
 from config import RSSHUB_BASE
 from telegram import Update, InputMediaPhoto
@@ -44,13 +45,13 @@ async def cmd_list(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("📭 当前监控列表为空，请在 targets.json 中添加。")
         return
 
-    msg = "📋 **当前正在监控的微博列表：**\n\n"
+    msg = "📋 <b>当前正在监控的微博列表：</b>\n\n"
     for uid, name in targets.items():
-        msg += f"👤 **{name}** (`{uid}`)\n"
+        msg += f"👤 <b>{html.escape(str(name))}</b> (<code>{html.escape(str(uid))}</code>)\n"
         
     msg += f"\n💡 共计 {len(targets)} 个目标。"
     
-    await update.message.reply_text(msg, parse_mode='Markdown')
+    await update.message.reply_text(msg, parse_mode='HTML')
     
 async def cmd_report(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """响应 /report 指令，手动查看当前巡检统计"""
@@ -65,13 +66,13 @@ async def cmd_report(update: Update, context: ContextTypes.DEFAULT_TYPE):
     posts_count = stats.get('new_posts', 0)
     
     msg = (
-        "📊 **实时巡检状态报告**\n\n"
+        "📊 <b>实时巡检状态报告</b>\n\n"
         f"⏳ 自上次日报以来：\n"
-        f"🔄 累计巡检次数：`{checks_count}` 次\n"
-        f"✨ 捕获新微博数：`{posts_count}` 条\n\n"
+        f"🔄 累计巡检次数：<code>{checks_count}</code> 次\n"
+        f"✨ 捕获新微博数：<code>{posts_count}</code> 条\n\n"
         "👌 机器人运行正常，正在持续监控中。"
     )
-    await update.message.reply_text(msg, parse_mode='Markdown')
+    await update.message.reply_text(msg, parse_mode='HTML')
 
 async def cmd_help(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """响应 /help 指令，列出所有可用命令"""
@@ -79,17 +80,17 @@ async def cmd_help(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     help_text = (
-        "🤖 **WeiboBot 指令指南**\n\n"
+        "🤖 <b>WeiboBot 指令指南</b>\n\n"
         "🔹 /list - 查看当前监控的博主名单\n"
         "🔹 /report - 立即查看当前的巡检统计数据\n"
         "🔹 /latest - 获取指定博主（或默认首位）的最新 3 条动态\n"
         "🔹 /help - 显示此帮助信息\n\n"
         "🔹 /set_cookie - 设置新的cookie信息\n"
-        "💡 **使用小窍门：**\n"
-        "发送 `/latest [UID]` 可精准查询。例如：`/latest 7888222767` \n\n"
-        "💡 *提示：系统每小时自动巡检一次，每天 22:00 发送汇总日报。*"
+        "💡 <b>使用小窍门：</b>\n"
+        "发送 <code>/latest [UID]</code> 可精准查询。例如：<code>/latest 7888222767</code> \n\n"
+        "💡 <i>提示：系统每小时自动巡检一次，每天 22:00 发送汇总日报。</i>"
     )
-    await update.message.reply_text(help_text, parse_mode='Markdown')
+    await update.message.reply_text(help_text, parse_mode='HTML')
     
     
     
@@ -121,13 +122,13 @@ async def cmd_set_cookie(update: Update, context: ContextTypes.DEFAULT_TYPE):
         stdout, stderr = await process.communicate()
 
         if process.returncode == 0:
-            await status_msg.edit_text("✅ **更新成功！**\n\nRSSHub 已带着新 Cookie 重启完成。")
+            await status_msg.edit_text("✅ <b>更新成功！</b>\n\nRSSHub 已带着新 Cookie 重启完成。", parse_mode='HTML')
         else:
-            error_log = stderr.decode().strip()
-            await status_msg.edit_text(f"⚠️ 容器重启失败！\n错误信息：`{error_log}`")
+            error_log = html.escape(stderr.decode().strip())
+            await status_msg.edit_text(f"⚠️ 容器重启失败！\n错误信息：<code>{error_log}</code>", parse_mode='HTML')
 
     except Exception as e:
-        await status_msg.edit_text(f"❌ 发生意外错误：`{str(e)}`")
+        await status_msg.edit_text(f"❌ 发生意外错误：<code>{html.escape(str(e))}</code>", parse_mode='HTML')
     
 async def cmd_latest(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """响应 /latest 指令，主动拉取博主的最新 3 条动态（支持多图）"""
@@ -142,11 +143,12 @@ async def cmd_latest(update: Update, context: ContextTypes.DEFAULT_TYPE):
     uid_to_check = context.args[0] if context.args else next(iter(targets))
     
     if uid_to_check not in targets:
-        await update.message.reply_text(f"❌ UID `{uid_to_check}` 不在您的监控列表中！", parse_mode='Markdown')
+        await update.message.reply_text(f"❌ UID <code>{html.escape(str(uid_to_check))}</code> 不在您的监控列表中！", parse_mode='HTML')
         return
 
     memo_name = targets[uid_to_check]
-    status_msg = await update.message.reply_text(f"🔍 正在为您拉取 **{memo_name}** 的最新动态...", parse_mode='Markdown')
+    safe_memo_name = html.escape(memo_name)
+    status_msg = await update.message.reply_text(f"🔍 正在为您拉取 <b>{safe_memo_name}</b> 的最新动态...", parse_mode='HTML')
     
     target_url = f"{RSSHUB_BASE}{uid_to_check}"
     
@@ -154,17 +156,17 @@ async def cmd_latest(update: Update, context: ContextTypes.DEFAULT_TYPE):
         async with httpx.AsyncClient(timeout=15) as client:
             resp = await client.get(target_url)
             if resp.status_code != 200:
-                await status_msg.edit_text(f"❌ 请求 RSSHub 失败，状态码：`{resp.status_code}`", parse_mode='Markdown')
+                await status_msg.edit_text(f"❌ 请求 RSSHub 失败，状态码：<code>{resp.status_code}</code>", parse_mode='HTML')
                 return
                 
             feed = feedparser.parse(resp.text)
             entries = feed.entries[:3]
             
             if not entries:
-                await status_msg.edit_text(f"📭 **{memo_name}** 最近没有发布任何内容。", parse_mode='Markdown')
+                await status_msg.edit_text(f"📭 <b>{safe_memo_name}</b> 最近没有发布任何内容。", parse_mode='HTML')
                 return
                 
-            await status_msg.edit_text(f"✅ 成功拉取 **{memo_name}** 的最新 {len(entries)} 条动态：", parse_mode='Markdown')
+            await status_msg.edit_text(f"✅ 成功拉取 <b>{safe_memo_name}</b> 的最新 {len(entries)} 条动态：", parse_mode='HTML')
             
             for entry in entries:
                 soup = BeautifulSoup(entry.description, "html.parser")
@@ -175,28 +177,27 @@ async def cmd_latest(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 img_tags = soup.find_all('img')
                 images = [img.get('src') for img in img_tags if img.get('src')]
                 
-                msg = (
-                    f"🕒 {entry.published}\n\n"
-                    f"📝 {display_text}\n\n"
-                    f"🔗 [点击查看原微博]({entry.link})"
-                )
+                safe_published = html.escape(getattr(entry, "published", "未知时间"))
+                safe_text = html.escape(display_text)
+                safe_link = html.escape(entry.link, quote=True)
+                msg = f"🕒 {safe_published}\n\n📝 {safe_text}\n\n🔗 <a href='{safe_link}'>点击查看原微博</a>"
                 
                 chat_id = update.effective_chat.id
                 
                 # 【新增】：根据图片数量决定发送模式
                 if not images:
                     # 没图片，发纯文本
-                    await context.bot.send_message(chat_id=chat_id, text=msg, parse_mode='Markdown', disable_web_page_preview=True)
+                    await context.bot.send_message(chat_id=chat_id, text=msg, parse_mode='HTML', disable_web_page_preview=True)
                 elif len(images) == 1:
                     # 单张图片
-                    await context.bot.send_photo(chat_id=chat_id, photo=images[0], caption=msg, parse_mode='Markdown')
+                    await context.bot.send_photo(chat_id=chat_id, photo=images[0], caption=msg[:1024], parse_mode='HTML')
                 else:
                     # 多张图片 (Telegram 限制一个 MediaGroup 最多 10 张)
                     media_group = []
                     for i, img_url in enumerate(images[:10]): 
                         if i == 0:
                             # 第一张图带上文字说明
-                            media_group.append(InputMediaPhoto(img_url, caption=msg, parse_mode='Markdown'))
+                            media_group.append(InputMediaPhoto(img_url, caption=msg[:1024], parse_mode='HTML'))
                         else:
                             media_group.append(InputMediaPhoto(img_url))
                     await context.bot.send_media_group(chat_id=chat_id, media=media_group)
@@ -205,4 +206,4 @@ async def cmd_latest(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 await asyncio.sleep(2) 
                 
     except Exception as e:
-        await status_msg.edit_text(f"❌ 抓取时发生意外错误：`{str(e)}`", parse_mode='Markdown')
+        await status_msg.edit_text(f"❌ 抓取时发生意外错误：<code>{html.escape(str(e))}</code>", parse_mode='HTML')

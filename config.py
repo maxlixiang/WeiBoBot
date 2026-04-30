@@ -13,4 +13,4 @@ HISTORY_FILE = "history.json"
 STATS_FILE = "stats.json"
 TARGETS_FILE = "targets.json"
 
-RSSHUB_BASE = "http://131.143.214.250:1200/weibo/user/"
+RSSHUB_BASE = os.getenv("RSSHUB_BASE", "http://131.143.214.250:1200/weibo/user/")

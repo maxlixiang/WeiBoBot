@@ -7,8 +7,8 @@ def load_json(file_path, default_value):
         try:
             with open(file_path, 'r', encoding='utf-8') as f:
                 return json.load(f)
-        except: 
-            pass
+        except Exception as e:
+            print(f"读取 JSON 文件失败: {file_path}: {e}")
     return default_value
 
 def save_json(file_path, data):
