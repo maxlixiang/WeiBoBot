@@ -2,7 +2,7 @@ import datetime
 from telegram.ext import ApplicationBuilder, CommandHandler
 from config import TOKEN
 from monitor import check_weibo
-from handlers import daily_report, cmd_list, cmd_report, cmd_help, cmd_latest,cmd_set_cookie
+from handlers import daily_report, cmd_list, cmd_report, cmd_help, cmd_latest, cmd_set_cookie, cmd_status, cmd_health, cmd_server, cmd_check_now
 
 if __name__ == '__main__':
     app = ApplicationBuilder().token(TOKEN).build()
@@ -19,5 +19,9 @@ if __name__ == '__main__':
     app.add_handler(CommandHandler("help", cmd_help))
     app.add_handler(CommandHandler("latest", cmd_latest)) 
     app.add_handler(CommandHandler("set_cookie", cmd_set_cookie))
+    app.add_handler(CommandHandler("status", cmd_status))
+    app.add_handler(CommandHandler("health", cmd_health))
+    app.add_handler(CommandHandler("server", cmd_server))
+    app.add_handler(CommandHandler("check_now", cmd_check_now))
     print("🤖 微博多核监控机器人已启动...")
     app.run_polling()

@@ -6,6 +6,7 @@ from telegram import InputMediaPhoto
 from utils import load_json, save_json
 from config import ALLOWED_USERS, TARGETS_FILE,RSSHUB_BASE
 import html
+import runtime_state
 
 
 
@@ -14,14 +15,20 @@ STATS_FILE = "stats.json"
 
 async def check_weibo(context):
     """带异常报警的多目标巡检任务"""
+    runtime_state.LAST_CHECK_AT = runtime_state.datetime.now()
+    runtime_state.LAST_CHECK_RESULT = "巡检中"
+    runtime_state.LAST_ERROR = ""
+
     history = load_json(HISTORY_FILE, {})
     stats = load_json(STATS_FILE, {"checks": 0, "new_posts": 0})
     targets = load_json(TARGETS_FILE, {})
     
     if not targets:
+        runtime_state.LAST_CHECK_RESULT = "跳过：监控列表为空"
         return
 
     stats["checks"] = stats.get("checks", 0) + 1 
+    new_posts_before = stats.get("new_posts", 0)
 
     try:
         try:
@@ -35,6 +42,8 @@ async def check_weibo(context):
                     if resp.status_code != 200:
                         error_msg = f"🚨 **RSSHub 异常警报**\n\n状态码：`{resp.status_code}`\n原因：可能是微博 Cookie 过期或 RSSHub 实例被限制。\n请检查 VPS 上的 RSSHub 容器日志！"
                         await send_text_to_allowed_users(context, error_msg, parse_mode='Markdown')
+                        runtime_state.LAST_CHECK_RESULT = f"失败：RSSHub 返回 {resp.status_code}"
+                        runtime_state.LAST_ERROR = runtime_state.LAST_CHECK_RESULT
                         return # 发生错误直接停止本次巡检
 
                     feed = feedparser.parse(resp.text)
@@ -42,6 +51,8 @@ async def check_weibo(context):
                     if "RSSHub" in feed.feed.title and "Error" in feed.feed.title:
                         error_msg = "🚨 **Weibo Cookie 已失效！**\n\n检测到 RSSHub 报错，请立即更新微博 Cookie 并重启 RSSHub 服务。"
                         await send_text_to_allowed_users(context, error_msg, parse_mode='Markdown')
+                        runtime_state.LAST_CHECK_RESULT = "失败：RSSHub 报错，可能是 Cookie 失效"
+                        runtime_state.LAST_ERROR = runtime_state.LAST_CHECK_RESULT
                         return
 
                     # --- 核心抓取与比对逻辑 ---
@@ -69,7 +80,12 @@ async def check_weibo(context):
                             # 4. 休息两秒，防止触发 Telegram 频繁发送限制
                             await asyncio.sleep(2)
 
+                found_count = stats.get("new_posts", 0) - new_posts_before
+                runtime_state.LAST_CHECK_RESULT = f"成功：发现 {found_count} 条新微博"
+
         except Exception as e:
+             runtime_state.LAST_CHECK_RESULT = "失败：巡检异常"
+             runtime_state.LAST_ERROR = str(e)
              print(f"巡检时发生未知错误: {e}")
     finally:
         # 无论巡检是否中途失败，都保存已经处理过的记录，避免重复推送。
