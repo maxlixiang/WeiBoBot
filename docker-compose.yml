@@ -9,6 +9,7 @@ services:
       - ./history.json:/app/history.json
       - ./stats.json:/app/stats.json
       - ./targets.json:/app/targets.json  
+      - ./archive:/app/archive
       - /var/run/docker.sock:/var/run/docker.sock  # 允许机器人控制宿主机 Docker
       - ./rsshub.env:/app/rsshub.env
     env_file:

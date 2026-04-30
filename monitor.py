@@ -7,6 +7,7 @@ from utils import load_json, save_json
 from config import ALLOWED_USERS, TARGETS_FILE,RSSHUB_BASE
 import html
 import runtime_state
+from archive import archive_weibo_post
 
 
 
@@ -73,6 +74,15 @@ async def check_weibo(context):
                             
                             img_tags = soup.find_all('img')
                             images = [img.get('src') for img in img_tags if img.get('src')]
+
+                            archive_weibo_post(
+                                uid=uid,
+                                author=memo_name,
+                                text=display_text,
+                                images=images,
+                                link=entry.link,
+                                published=getattr(entry, "published", ""),
+                            )
                             
                             # 3. 发送提醒
                             await send_weibo_alert(context, memo_name, display_text, images, entry.link)
